@@ -7,13 +7,13 @@
  * @note As you add things to this file you may want to change the method signature
  */
 
-#include "execute.h"
-
-#include <stdio.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <sys/wait.h>
-#include "quash.h"
+
+#include "execute.h"
 #include "Job.h"
+#include "quash.h"
 
 // Remove this and all expansion calls to it
 /**
@@ -29,6 +29,7 @@
 #define GET_CWD_BSIZE 512
 #define READ_END 0
 #define WRITE_END 1
+#define OVERWRITE_MODE 1
 
 /***************************************************************************
  * Globals
@@ -168,12 +169,11 @@ void run_generic(GenericCommand cmd) {
 void run_echo(EchoCommand cmd) {
   // Print an array of strings. The args array is a NULL terminated (last
   // string is always NULL) list of strings.
-  char** str = cmd.args;
-  char* word;
+   char** str = cmd.args;
 
-  while( (word = *(str++)))
+  for( int i = 0; NULL != str[i]; i++ )
   {
-    printf("%s ", word);
+    printf("%s ", str[i]);
   }
 
   // Flush the buffer before returning
@@ -184,10 +184,10 @@ void run_echo(EchoCommand cmd) {
 // Sets an environment variable
 void run_export(ExportCommand cmd) {
   // Write an environment variable
-  const char* env_var = cmd.env_var;
-  const char* val = cmd.val;
+  const char* const env_var = cmd.env_var;
+  const char* const val = cmd.val;
 
-  setenv(env_var, val, 1); //1 is overwrite mode
+  setenv(env_var, val, OVERWRITE_MODE);
 }
 
 // Changes the current working directory
@@ -213,8 +213,8 @@ void run_cd(CDCommand cmd) {
   // working directory.
   new_dir = getcwd(NULL, GET_CWD_BSIZE);
 
-  setenv("PWD", new_dir, 1);
-  setenv("OLDPWD", old_dir, 1);
+  setenv("PWD", new_dir, OVERWRITE_MODE);
+  setenv("OLDPWD", old_dir, OVERWRITE_MODE);
 
   free(new_dir);
   free(old_dir);
@@ -405,14 +405,14 @@ void parent_run_command(Command cmd) {
  */
 void create_process(CommandHolder holder, Job* current_job, int stepOfJob) {
   // Read the flags field from the parser
-  bool p_in  = holder.flags & PIPE_IN;
-  bool p_out = holder.flags & PIPE_OUT;
-  bool r_in  = holder.flags & REDIRECT_IN;
-  bool r_out = holder.flags & REDIRECT_OUT;
-  bool r_app = holder.flags & REDIRECT_APPEND; // This can only be true if r_out
+  const bool p_in  = holder.flags & PIPE_IN;
+  const bool p_out = holder.flags & PIPE_OUT;
+  const bool r_in  = holder.flags & REDIRECT_IN;
+  const bool r_out = holder.flags & REDIRECT_OUT;
+  const bool r_app = holder.flags & REDIRECT_APPEND; // This can only be true if r_out
                                                // is true
 
-  int pid = fork();
+  pid_t pid = fork();
   if( 0 == pid )
   {
     // redirect input from file
@@ -523,7 +523,7 @@ void run_script(CommandHolder* holders) {
   {
     // Not a background Job
     // Wait for all processes under the job to complete
-    while (!is_empty_job_process_queue_t(&current_job.process_queue) )
+    while ( !is_empty_job_process_queue_t(&current_job.process_queue) )
     {
       int status;
       if (
