@@ -18,7 +18,11 @@
  * @brief Note calls to any function that requires implementation
  */
 #define IMPLEMENT_ME()                                                  \
-  fprintf(stderr, "IMPLEMENT ME: %s(line %d): %s()\n", __FILE__, __LINE__, __FUNCTION__)
+  fprintf(stderr, "IMPLEMENT ME: %s(line %d): %s()\n", __FILE__,        \
+            __LINE__, __FUNCTION__)
+#define GET_CWD_BSIZE 512
+#define READ_END 0
+#define WRITE_END 1
 
 /***************************************************************************
  * Interface Functions
@@ -26,28 +30,20 @@
 
 // Return a string containing the current working directory.
 char* get_current_directory(bool* should_free) {
-  // TODO: Get the current working directory. This will fix the prompt path.
-  // HINT: This should be pretty simple
-  IMPLEMENT_ME();
-
+  //Get CWD Mallocs space for the return value
   // Change this to true if necessary
-  *should_free = false;
+  *should_free = true;
 
-  return "get_current_directory()";
+  return getcwd(NULL, GET_CWD_BSIZE);
 }
 
 // Returns the value of an environment variable env_var
 const char* lookup_env(const char* env_var) {
-  // TODO: Lookup environment variables. This is required for parser to be able
+  // Lookup environment variables. This is required for parser to be able
   // to interpret variables from the command line and display the prompt
   // correctly
-  // HINT: This should be pretty simple
-  IMPLEMENT_ME();
-
-  // TODO: Remove warning silencers
-  (void) env_var; // Silence unused variable warning
-
-  return "???";
+  
+  return getenv(env_var);
 }
 
 // Check the status of background jobs
@@ -91,13 +87,8 @@ void run_generic(GenericCommand cmd) {
   // in the array is the executable
   char* exec = cmd.args[0];
   char** args = cmd.args;
-
-  // TODO: Remove warning silencers
-  (void) exec; // Silence unused variable warning
-  (void) args; // Silence unused variable warning
-
-  // TODO: Implement run generic
-  IMPLEMENT_ME();
+  
+  execvp(exec, args);
 
   perror("ERROR: Failed to execute program");
 }
@@ -107,14 +98,15 @@ void run_echo(EchoCommand cmd) {
   // Print an array of strings. The args array is a NULL terminated (last
   // string is always NULL) list of strings.
   char** str = cmd.args;
+  char* word;
 
-  // TODO: Remove warning silencers
-  (void) str; // Silence unused variable warning
-
-  // TODO: Implement echo
-  IMPLEMENT_ME();
+  while( (word = *(str++)))
+  {
+    printf("%s ", word);
+  }
 
   // Flush the buffer before returning
+  printf("\n");
   fflush(stdout);
 }
 
@@ -124,13 +116,7 @@ void run_export(ExportCommand cmd) {
   const char* env_var = cmd.env_var;
   const char* val = cmd.val;
 
-  // TODO: Remove warning silencers
-  (void) env_var; // Silence unused variable warning
-  (void) val;     // Silence unused variable warning
-
-  // TODO: Implement export.
-  // HINT: This should be quite simple.
-  IMPLEMENT_ME();
+  setenv(env_var, val, 1); //1 is overwrite mode
 }
 
 // Changes the current working directory
@@ -144,12 +130,21 @@ void run_cd(CDCommand cmd) {
     return;
   }
 
-  // TODO: Change directory
+  char* oldDirectory = getcwd(NULL, GET_CWD_BSIZE);
 
-  // TODO: Update the PWD environment variable to be the new current working
+  // Change directory
+  chdir(dir);
+  
+  // Update the PWD environment variable to be the new current working
   // directory and optionally update OLD_PWD environment variable to be the old
   // working directory.
-  IMPLEMENT_ME();
+  char* newDirectory = getcwd(NULL, GET_CWD_BSIZE);
+
+  setenv("PWD", newDirectory, 1);
+  setenv("OLDPWD", oldDirectory, 1);
+
+  free(newDirectory);
+  free(oldDirectory);
 }
 
 // Sends a signal to all processes contained in a job
@@ -168,8 +163,15 @@ void run_kill(KillCommand cmd) {
 
 // Prints the current working directory to stdout
 void run_pwd() {
-  // TODO: Print the current working directory
-  IMPLEMENT_ME();
+  // Print the current working directory
+  bool should_free;
+  char* str = get_current_directory(&should_free);
+  printf("%s\n", str);
+
+  if(should_free)
+  {
+    free(str);
+  }
 
   // Flush the buffer before returning
   fflush(stdout);
@@ -305,9 +307,9 @@ void create_process(CommandHolder holder) {
   // TODO: Setup pipes, redirects, and new process
   IMPLEMENT_ME();
 
-  //parent_run_command(holder.cmd); // This should be done in the parent branch of
+  parent_run_command(holder.cmd); // This should be done in the parent branch of
                                   // a fork
-  //child_run_command(holder.cmd); // This should be done in the child branch of a fork
+  child_run_command(holder.cmd); // This should be done in the child branch of a fork
 }
 
 // Run a list of commands
