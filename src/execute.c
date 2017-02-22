@@ -11,7 +11,7 @@
 
 #include <stdio.h>
 #include <fcntl.h>
-
+#include <sys/wait.h>
 #include "quash.h"
 #include "Job.h"
 
@@ -390,6 +390,8 @@ void destroyBackgroundJobQueue(void)
   destroy_background_job_queue_t(&backgroundQueue);
 }
 
+int jobID = 1;
+
 // Run a list of commands
 void run_script(CommandHolder* holders) {
   if (holders == NULL)
@@ -412,15 +414,30 @@ void run_script(CommandHolder* holders) {
 
   if (!(holders[0].flags & BACKGROUND)) {
     // Not a background Job
-    // TODO: Wait for all processes under the job to complete
-    IMPLEMENT_ME();
+    // Wait for all processes under the job to complete
+    while (!is_empty_job_process_queue_t(&currentJob.process_queue) )
+    {
+      int status;
+      if (
+          waitpid(peek_back_job_process_queue_t(&currentJob.process_queue),
+                  &status, 0) != -1)
+      {
+        pop_back_job_process_queue_t(&currentJob.process_queue);
+      }    
+    }
+
+    destroy_job(&currentJob);
   }
   else {
     // A background job.
-    // TODO: Push the new job to the job queue
-    IMPLEMENT_ME();
-
-    // TODO: Once jobs are implemented, uncomment and fill the following line
-    // print_job_bg_start(job_id, pid, cmd);
+    // Push the new job to the job queue
+    currentJob.isBackground = true;
+    currentJob.isCompleted = false;
+    currentJob.cmd = get_command_string();
+    currentJob.jobID = jobID++;
+    push_back_background_job_queue_t(&backgroundQueue, currentJob);
+    
+    //Once jobs are implemented, uncomment and fill the following line
+    print_job_bg_start(currentJob.jobID, peek_front_job_process_queue_t(&currentJob.process_queue), currentJob.cmd);
   }
 }
