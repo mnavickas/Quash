@@ -50,13 +50,60 @@ const char* lookup_env(const char* env_var) {
 
 // Check the status of background jobs
 void check_jobs_bg_status() {
-  // TODO: Check on the statuses of all processes belonging to all background
+  // Check on the statuses of all processes belonging to all background
   // jobs. This function should remove jobs from the jobs queue once all
   // processes belonging to a job have completed.
-  IMPLEMENT_ME();
 
-  // TODO: Once jobs are implemented, uncomment and fill the following line
-  // print_job_bg_complete(job_id, pid, cmd);
+
+  if( is_empty_background_job_queue_t(&backgroundQueue) )
+  {
+    return;
+  }
+
+  int jobQueueLength = length_background_job_queue_t(&backgroundQueue);
+
+  for(int i = 0; i < jobQueueLength; i++)
+  {
+    Job job = pop_front_background_job_queue_t(&backgroundQueue);
+    job_process_queue_t queue = job.process_queue;
+
+    int processQueueLength = length_job_process_queue_t(&queue);
+    bool jobStillHasRunningProcess = false;
+
+    for(int j = 0; j < processQueueLength; j++)
+    {
+      int status;
+      int pid = pop_front_job_process_queue_t(&queue);
+      pid_t return_pid = waitpid(pid, &status, WNOHANG);
+      if (return_pid == -1)
+      {
+          // error
+      }
+      else if (return_pid == 0)
+      {
+          // child is still running
+          jobStillHasRunningProcess = true;
+      }
+      else if (return_pid == pid)
+      {
+          // child is finished.
+      }
+      //put it back in the container.
+      push_back_job_process_queue_t(&queue,pid);
+    } // end for processQueueLength
+
+    if( jobStillHasRunningProcess )
+    {
+      // re-add it to the queue
+      push_back_background_job_queue_t(&backgroundQueue,job);
+    }
+    else
+    {
+      // don't add it back, print message
+      print_job_bg_complete(job.jobID, peek_front_job_process_queue_t(&job.process_queue), job.cmd);
+      destroy_job(&job);
+    }
+  } //end for jobQueueLength
 }
 
 // Prints the job id number, the process id of the first process belonging to
