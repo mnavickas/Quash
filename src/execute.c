@@ -22,9 +22,18 @@
 #define IMPLEMENT_ME()                                                  \
   fprintf(stderr, "IMPLEMENT ME: %s(line %d): %s()\n", __FILE__,        \
             __LINE__, __FUNCTION__)
+
+/***************************************************************************
+ * Memory Constants
+ ***************************************************************************/
 #define GET_CWD_BSIZE 512
 #define READ_END 0
 #define WRITE_END 1
+
+/***************************************************************************
+ * Globals
+ ***************************************************************************/
+job_id_t job_id = 1;
 
 /***************************************************************************
  * Interface Functions
@@ -55,34 +64,43 @@ void check_jobs_bg_status() {
   // processes belonging to a job have completed.
 
 
-  if( is_empty_background_job_queue_t(&backgroundQueue) )
+  if( is_empty_background_job_queue_t(&background_queue) )
   {
     return;
   }
 
-  int jobQueueLength = length_background_job_queue_t(&backgroundQueue);
+  int job_queue_length = length_background_job_queue_t(&background_queue);
 
-  for(int i = 0; i < jobQueueLength; i++)
+  for(int i = 0; i < job_queue_length; i++)
   {
-    Job job = pop_front_background_job_queue_t(&backgroundQueue);
-    job_process_queue_t queue = job.process_queue;
+    Job job;
+    job_process_queue_t queue;
+    int process_queue_length;
+    bool job_still_has_running_process;;
 
-    int processQueueLength = length_job_process_queue_t(&queue);
-    bool jobStillHasRunningProcess = false;
+    job = pop_front_background_job_queue_t(&background_queue);
+    queue = job.process_queue;
+    process_queue_length = length_job_process_queue_t(&queue);
+    job_still_has_running_process = false;
 
-    for(int j = 0; j < processQueueLength; j++)
+
+
+    for( int j = 0; j < process_queue_length; j++ )
     {
       int status;
-      int pid = pop_front_job_process_queue_t(&queue);
-      pid_t return_pid = waitpid(pid, &status, WNOHANG);
-      if (return_pid == -1)
+      int pid;
+      pid_t return_pid;
+
+      pid = pop_front_job_process_queue_t(&queue);
+      return_pid = waitpid(pid, &status, WNOHANG);
+      if ( -1 == return_pid )
       {
           // error
       }
-      else if (return_pid == 0)
+      else if ( 0 == return_pid )
       {
           // child is still running
-          jobStillHasRunningProcess = true;
+          job_still_has_running_process = true;
       }
       else if (return_pid == pid)
       {
@@ -90,37 +108,41 @@ void check_jobs_bg_status() {
       }
       //put it back in the container.
       push_back_job_process_queue_t(&queue,pid);
-    } // end for processQueueLength
+    } // end for process_queue_length
 
-    if( jobStillHasRunningProcess )
+    if( job_still_has_running_process )
     {
       // re-add it to the queue
-      push_back_background_job_queue_t(&backgroundQueue,job);
+      push_back_background_job_queue_t(&background_queue,job);
     }
     else
     {
       // don't add it back, print message
-      print_job_bg_complete(job.jobID, peek_front_job_process_queue_t(&job.process_queue), job.cmd);
+      print_job_bg_complete(
+                              job.job_id,
+                              peek_front_job_process_queue_t(&job.process_queue),
+                              job.cmd
+                           );
       destroy_job(&job);
     }
-  } //end for jobQueueLength
+  } //end for job_queue_length
 }
 
 // Prints the job id number, the process id of the first process belonging to
 // the Job, and the command string associated with this job
-void print_job(int job_id, pid_t pid, const char* cmd) {
+void print_job(job_id_t job_id, pid_t pid, const char* cmd) {
   printf("[%d]\t%8d\t%s\n", job_id, pid, cmd);
   fflush(stdout);
 }
 
 // Prints a start up message for background processes
-void print_job_bg_start(int job_id, pid_t pid, const char* cmd) {
+void print_job_bg_start(job_id_t job_id, pid_t pid, const char* cmd) {
   printf("Background job started: ");
   print_job(job_id, pid, cmd);
 }
 
 // Prints a completion message followed by the print job
-void print_job_bg_complete(int job_id, pid_t pid, const char* cmd) {
+void print_job_bg_complete(job_id_t job_id, pid_t pid, const char* cmd) {
   printf("Completed: \t");
   print_job(job_id, pid, cmd);
 }
@@ -172,14 +194,16 @@ void run_export(ExportCommand cmd) {
 void run_cd(CDCommand cmd) {
   // Get the directory name
   const char* dir = cmd.dir;
+  char* old_dir;
+  char* new_dir;
 
   // Check if the directory is valid
-  if (dir == NULL) {
+  if ( NULL == dir ) {
     perror("ERROR: Failed to resolve path");
     return;
   }
 
-  char* oldDirectory = getcwd(NULL, GET_CWD_BSIZE);
+  old_dir = getcwd(NULL, GET_CWD_BSIZE);
 
   // Change directory
   chdir(dir);
@@ -187,48 +211,52 @@ void run_cd(CDCommand cmd) {
   // Update the PWD environment variable to be the new current working
   // directory and optionally update OLD_PWD environment variable to be the old
   // working directory.
-  char* newDirectory = getcwd(NULL, GET_CWD_BSIZE);
+  new_dir = getcwd(NULL, GET_CWD_BSIZE);
 
-  setenv("PWD", newDirectory, 1);
-  setenv("OLDPWD", oldDirectory, 1);
+  setenv("PWD", new_dir, 1);
+  setenv("OLDPWD", old_dir, 1);
 
-  free(newDirectory);
-  free(oldDirectory);
+  free(new_dir);
+  free(old_dir);
 }
 
 // Sends a signal to all processes contained in a job
 void run_kill(KillCommand cmd) {
   int signal = cmd.sig;
-  int job_id = cmd.job;
+  job_id_t job_id = cmd.job;
 
   // FOR process IN job
   // kill(process.id, signal)
   // END FOR
 
-  int jobQueueLength = length_background_job_queue_t(&backgroundQueue);
+  int job_queue_length = length_background_job_queue_t(&background_queue);
 
-  for(int i = 0; i < jobQueueLength; i++)
+  for(int i = 0; i < job_queue_length; i++)
   {
 
-    Job job = pop_front_background_job_queue_t(&backgroundQueue);
-    if( job_id == job.jobID )
+    Job job = pop_front_background_job_queue_t(&background_queue);
+    if( job_id == job.job_id )
     {
-      job_process_queue_t queue = job.process_queue;
-      int processQueueLength = length_job_process_queue_t(&queue);
-      for( int j = 0; j < processQueueLength; j++)
+      job_process_queue_t queue;
+      int process_queue_length;
+
+      queue = job.process_queue;
+      process_queue_length = length_job_process_queue_t(&queue);
+
+      for( int j = 0; j < process_queue_length; j++)
       {
         int pid = pop_front_job_process_queue_t(&queue);
         kill(pid,signal);
         push_back_job_process_queue_t(&queue,pid);
       }
-      push_back_background_job_queue_t(&backgroundQueue,job);
+      push_back_background_job_queue_t(&background_queue,job);
 
     }
     else
     {
-        push_back_background_job_queue_t(&backgroundQueue, job);
+        push_back_background_job_queue_t(&background_queue, job);
     }
-  } //end for jobQueueLength
+  } //end for job_queue_length
 }
 
 
@@ -251,18 +279,22 @@ void run_pwd() {
 // Prints all background jobs currently in the job list to stdout
 void run_jobs() {
   // Print background jobs
-  if( is_empty_background_job_queue_t(&backgroundQueue) )
+  if( is_empty_background_job_queue_t(&background_queue) )
   {
     return;
   }
 
-  int jobQueueLength = length_background_job_queue_t(&backgroundQueue);
+  int job_queue_length = length_background_job_queue_t(&background_queue);
 
-  for(int i = 0; i < jobQueueLength; i++)
+  for(int i = 0; i < job_queue_length; i++)
   {
-    Job job = pop_front_background_job_queue_t(&backgroundQueue);
-    print_job(job.jobID,peek_front_job_process_queue_t(&job.process_queue), job.cmd);
-    push_back_background_job_queue_t(&backgroundQueue,job);
+    Job job = pop_front_background_job_queue_t(&background_queue);
+    print_job(
+                job.job_id,
+                peek_front_job_process_queue_t(&job.process_queue),
+                job.cmd
+             );
+    push_back_background_job_queue_t(&background_queue,job);
   }
 
   // Flush the buffer before returning
@@ -447,7 +479,7 @@ void create_process(CommandHolder holder, Job* current_job, int stepOfJob) {
      {
        close(current_job->pipes[stepOfJob-1][READ_END]);
      }
-     push_front_job(current_job,pid);
+     push_process_front_to_job(current_job,pid);
      parent_run_command(holder.cmd); // This should be done in the parent branch
   }
 
@@ -456,62 +488,67 @@ void create_process(CommandHolder holder, Job* current_job, int stepOfJob) {
 // Do the thing
 void initBackgroundJobQueue(void)
 {
-  backgroundQueue = new_destructable_background_job_queue_t(1,destroy_job_2);
+  background_queue = new_destructable_background_job_queue_t(1,destroy_job_callback);
 }
 
 void destroyBackgroundJobQueue(void)
 {
-  destroy_background_job_queue_t(&backgroundQueue);
+  destroy_background_job_queue_t(&background_queue);
 }
-
-int jobID = 1;
 
 // Run a list of commands
 void run_script(CommandHolder* holders) {
-  if (holders == NULL)
+  if ( NULL == holders )
     return;
 
   check_jobs_bg_status();
 
-  if (get_command_holder_type(holders[0]) == EXIT &&
-      get_command_holder_type(holders[1]) == EOC) {
+  if (EXIT == get_command_holder_type(holders[0]) &&
+      EOC == get_command_holder_type(holders[1]))
+  {
     end_main_loop();
     return;
   }
 
   CommandType type;
-  Job currentJob = new_Job(10);
+  Job current_job = new_Job();
 
   // Run all commands in the `holder` array
   for (int i = 0; (type = get_command_holder_type(holders[i])) != EOC; ++i)
-    create_process(holders[i], &currentJob, i);
+  {
+    create_process(holders[i], &current_job, i);
+  }
 
-  if (!(holders[0].flags & BACKGROUND)) {
+  if ( !(holders[0].flags & BACKGROUND) )
+  {
     // Not a background Job
     // Wait for all processes under the job to complete
-    while (!is_empty_job_process_queue_t(&currentJob.process_queue) )
+    while (!is_empty_job_process_queue_t(&current_job.process_queue) )
     {
       int status;
       if (
-          waitpid(peek_back_job_process_queue_t(&currentJob.process_queue),
+          waitpid(peek_back_job_process_queue_t(&current_job.process_queue),
                   &status, 0) != -1)
       {
-        pop_back_job_process_queue_t(&currentJob.process_queue);
+        pop_back_job_process_queue_t(&current_job.process_queue);
       }
     }
 
-    destroy_job(&currentJob);
+    destroy_job(&current_job);
   }
-  else {
+  else
+  {
     // A background job.
     // Push the new job to the job queue
-    currentJob.isBackground = true;
-    currentJob.isCompleted = false;
-    currentJob.cmd = get_command_string();
-    currentJob.jobID = jobID++;
-    push_back_background_job_queue_t(&backgroundQueue, currentJob);
+    current_job.is_background = true;
+    current_job.cmd = get_command_string();
+    current_job.job_id = job_id++;
+    push_back_background_job_queue_t(&background_queue, current_job);
 
-    //Once jobs are implemented, uncomment and fill the following line
-    print_job_bg_start(currentJob.jobID, peek_front_job_process_queue_t(&currentJob.process_queue), currentJob.cmd);
+    print_job_bg_start(
+                        current_job.job_id,
+                        peek_front_job_process_queue_t(&current_job.process_queue),
+                        current_job.cmd
+                      );
   }
 }

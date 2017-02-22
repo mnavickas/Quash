@@ -173,6 +173,6 @@ void initBackgroundJobQueue(void);
 */
 void destroyBackgroundJobQueue(void);
 
-background_job_queue_t backgroundQueue;
+background_job_queue_t background_queue;
 
 #endif
