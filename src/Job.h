@@ -20,5 +20,6 @@ Job new_Job(int max_pipes_needed);
 void push_front_job(Job* job,int pid);
 
 void destroy_job(Job* job);
+void destroy_job_2(Job job);
 
 #endif

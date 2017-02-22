@@ -5,6 +5,7 @@
 Job new_Job(int max_pipes_needed)
 {
   Job job;
+  job.isBackground = false;
   job.process_queue = new_job_process_queue_t(0);
   for(int i = 0; i < MAX_PIPES; i++)
   {
@@ -21,4 +22,16 @@ void push_front_job(Job* job,int pid)
 void destroy_job(Job* job)
 {
   destroy_job_process_queue_t(&(job->process_queue));
+  if(job->isBackground)
+  {
+    free(job->cmd);
+  }
+}
+void destroy_job_2(Job job)
+{
+  destroy_job_process_queue_t(&(job.process_queue));
+  if(job.isBackground)
+  {
+    free(job.cmd);
+  }
 }

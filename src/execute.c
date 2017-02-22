@@ -44,7 +44,7 @@ const char* lookup_env(const char* env_var) {
   // Lookup environment variables. This is required for parser to be able
   // to interpret variables from the command line and display the prompt
   // correctly
-  
+
   return getenv(env_var);
 }
 
@@ -136,7 +136,7 @@ void run_generic(GenericCommand cmd) {
   // in the array is the executable
   char* exec = cmd.args[0];
   char** args = cmd.args;
-  
+
   execvp(exec, args);
 
   perror("ERROR: Failed to execute program");
@@ -183,7 +183,7 @@ void run_cd(CDCommand cmd) {
 
   // Change directory
   chdir(dir);
-  
+
   // Update the PWD environment variable to be the new current working
   // directory and optionally update OLD_PWD environment variable to be the old
   // working directory.
@@ -380,13 +380,6 @@ void create_process(CommandHolder holder, Job* current_job, int stepOfJob) {
   bool r_app = holder.flags & REDIRECT_APPEND; // This can only be true if r_out
                                                // is true
 
-  // TODO: Remove warning silencers
-  (void) p_in;  // Silence unused variable warning
-  (void) p_out; // Silence unused variable warning
-  (void) r_in;  // Silence unused variable warning
-  (void) r_out; // Silence unused variable warning
-  (void) r_app; // Silence unused variable warning
-
   int pid = fork();
   if( 0 == pid )
   {
@@ -455,7 +448,7 @@ void create_process(CommandHolder holder, Job* current_job, int stepOfJob) {
        close(current_job->pipes[stepOfJob-1][READ_END]);
      }
      push_front_job(current_job,pid);
-     parent_run_command(holder.cmd); // This should be done in the parent branch 
+     parent_run_command(holder.cmd); // This should be done in the parent branch
   }
 
 }
@@ -463,7 +456,7 @@ void create_process(CommandHolder holder, Job* current_job, int stepOfJob) {
 // Do the thing
 void initBackgroundJobQueue(void)
 {
-  backgroundQueue = new_background_job_queue_t(1);
+  backgroundQueue = new_destructable_background_job_queue_t(1,destroy_job_2);
 }
 
 void destroyBackgroundJobQueue(void)
@@ -504,7 +497,7 @@ void run_script(CommandHolder* holders) {
                   &status, 0) != -1)
       {
         pop_back_job_process_queue_t(&currentJob.process_queue);
-      }    
+      }
     }
 
     destroy_job(&currentJob);
@@ -517,7 +510,7 @@ void run_script(CommandHolder* holders) {
     currentJob.cmd = get_command_string();
     currentJob.jobID = jobID++;
     push_back_background_job_queue_t(&backgroundQueue, currentJob);
-    
+
     //Once jobs are implemented, uncomment and fill the following line
     print_job_bg_start(currentJob.jobID, peek_front_job_process_queue_t(&currentJob.process_queue), currentJob.cmd);
   }
