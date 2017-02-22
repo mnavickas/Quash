@@ -10,8 +10,10 @@
 #include "execute.h"
 
 #include <stdio.h>
+#include <fcntl.h>
 
 #include "quash.h"
+#include "Job.h"
 
 // Remove this and all expansion calls to it
 /**
@@ -288,7 +290,7 @@ void parent_run_command(Command cmd) {
  *
  * @sa Command CommandHolder
  */
-void create_process(CommandHolder holder) {
+void create_process(CommandHolder holder, Job* current_job, int stepOfJob) {
   // Read the flags field from the parser
   bool p_in  = holder.flags & PIPE_IN;
   bool p_out = holder.flags & PIPE_OUT;
@@ -307,11 +309,71 @@ void create_process(CommandHolder holder) {
   int pid = fork();
   if( 0 == pid )
   {
+    // redirect input from file
+    if( r_in )
+    {
+      int file_in = open(holder.redirect_in,O_RDONLY);
+      dup2(file_in,STDIN_FILENO);
+      close(file_in);
+    }
+    // redirect output to file
+    if( r_out )
+    {
+      FILE * file;
+      if( r_app )
+      {
+        file = fopen(holder.redirect_out,"a");
+      }
+      else
+      {
+        file = fopen(holder.redirect_out,"w");
+      }
+      dup2(fileno(file),STDOUT_FILENO);
+      fclose(file);
+    }
+    // If we are piping output elsewhere
+    if( p_out )
+    {
+      // duplicate
+      dup2(current_job->pipes[stepOfJob][WRITE_END],STDOUT_FILENO);
+      // dup'd handle is sufficient
+      close(current_job->pipes[stepOfJob][WRITE_END]);
+    }
+    else
+    {
+      // close it since we arent using it
+      close(current_job->pipes[stepOfJob][WRITE_END]);
+    }
+
+    // if we are piping input from elsewhere
+    if( p_in )
+    {
+      // duplicate
+      dup2(current_job->pipes[stepOfJob-1][READ_END],STDIN_FILENO);
+      // dup'd handle is sufficient
+      close(current_job->pipes[stepOfJob-1][READ_END]);
+    }
+    else if( 0 <= stepOfJob-1 )
+    {
+      // close it since we arent using it
+      close(current_job->pipes[stepOfJob-1][READ_END]);
+    }
+
     child_run_command(holder.cmd); // This should be done in the child branch
+    destroy_job(current_job);
     exit(EXIT_SUCCESS);
   }
   else
   {
+     if( p_out )
+     {
+       close(current_job->pipes[stepOfJob][WRITE_END]);
+     }
+     if( p_in )
+     {
+       close(current_job->pipes[stepOfJob-1][READ_END]);
+     }
+     push_front_job(current_job,pid);
      parent_run_command(holder.cmd); // This should be done in the parent branch 
   }
 
@@ -342,10 +404,11 @@ void run_script(CommandHolder* holders) {
   }
 
   CommandType type;
+  Job currentJob = new_Job(10);
 
   // Run all commands in the `holder` array
   for (int i = 0; (type = get_command_holder_type(holders[i])) != EOC; ++i)
-    create_process(holders[i]);
+    create_process(holders[i], &currentJob, i);
 
   if (!(holders[0].flags & BACKGROUND)) {
     // Not a background Job
