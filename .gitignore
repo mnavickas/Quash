@@ -1,6 +1,6 @@
 
 # Object files
 obj/
-
+test-cases/
 # executable
 quash
