@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include "command.h"
+#include "BackgroundJobQueue.h"
 
 /**
  * @brief Function to get environment variable values
@@ -161,5 +162,17 @@ void run_jobs();
  * @sa Command
  */
 void run_script(CommandHolder* holders);
+
+/**
+*   Initialize Background Job Queue
+*/
+void initBackgroundJobQueue(void);
+
+/**
+*   Destroys Background Job Queue
+*/
+void destroyBackgroundJobQueue(void);
+
+background_job_queue_t backgroundQueue;
 
 #endif

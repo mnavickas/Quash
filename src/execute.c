@@ -317,6 +317,17 @@ void create_process(CommandHolder holder) {
 
 }
 
+// Do the thing
+void initBackgroundJobQueue(void)
+{
+  backgroundQueue = new_background_job_queue_t(1);
+}
+
+void destroyBackgroundJobQueue(void)
+{
+  destroy_background_job_queue_t(&backgroundQueue);
+}
+
 // Run a list of commands
 void run_script(CommandHolder* holders) {
   if (holders == NULL)

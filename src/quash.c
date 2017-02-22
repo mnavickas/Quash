@@ -119,6 +119,7 @@ int main(int argc, char** argv) {
 
   atexit(destroy_parser);
   atexit(destroy_memory_pool);
+  atexit(destroyBackgroundJobQueue);
 
   // Main execution loop
   while (is_running()) {
