@@ -109,7 +109,7 @@ void end_main_loop() {
  */
 int main(int argc, char** argv) {
   state = initial_state();
-
+  initBackgroundJobQueue();
   if (is_tty()) {
     puts("Welcome to Quash!");
     puts("Type \"exit\" or \"quit\" to quit");
